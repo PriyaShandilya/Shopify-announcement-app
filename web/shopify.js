@@ -2,33 +2,46 @@ import { BillingInterval, LATEST_API_VERSION } from "@shopify/shopify-api";
 import { shopifyApp } from "@shopify/shopify-app-express";
 import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
 import { restResources } from "@shopify/shopify-api/rest/admin/2024-10";
-
-// 🌟 ADD THIS SPECIFIC PATH IMPORT RIGHT HERE 🌟
-import { join } from "path"; 
+import { join } from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 
-// Look for .env in the current folder, if not found, look one level up
-const localEnv = join(process.cwd(), ".env");
-const parentEnv = join(process.cwd(), "..", ".env");
+// ✅ Load .env only in development
+if (process.env.NODE_ENV !== "production") {
+  const localEnv = join(process.cwd(), ".env");
+  const parentEnv = join(process.cwd(), "..", ".env");
 
-if (fs.existsSync(localEnv)) {
-  dotenv.config({ path: localEnv });
-} else {
-  dotenv.config({ path: parentEnv });
+  if (fs.existsSync(localEnv)) {
+    dotenv.config({ path: localEnv });
+  } else if (fs.existsSync(parentEnv)) {
+    dotenv.config({ path: parentEnv });
+  }
 }
-const DB_PATH = `${process.cwd()}/database.sqlite`;
 
-const billingConfig = {
-  "My Shopify One-Time Charge": {
-    amount: 5.0,
-    currencyCode: "USD",
-    interval: BillingInterval.OneTime,
-  },
-};
+// ✅ Validate required env vars at startup
+const requiredEnvVars = [
+  "SHOPIFY_API_KEY",
+  "SHOPIFY_API_SECRET",
+  "SHOPIFY_APP_URL",
+];
+
+for (const key of requiredEnvVars) {
+  if (!process.env[key]) {
+    throw new Error(
+      `❌ Missing required environment variable: ${key}. Please set it in Render → Environment.`
+    );
+  }
+}
+
+const DB_PATH = `${process.cwd()}/database.sqlite`;
 
 const shopify = shopifyApp({
   api: {
+    apiKey: process.env.SHOPIFY_API_KEY,           // ✅ Required
+    apiSecretKey: process.env.SHOPIFY_API_SECRET,  // ✅ Required
+    scopes: (process.env.SCOPES || "write_products").split(","),
+    hostName: process.env.SHOPIFY_APP_URL.replace(/https?:\/\//, ""), // ✅ e.g. shopify-announcement-app-c5dh.onrender.com
+    hostScheme: "https",
     apiVersion: LATEST_API_VERSION,
     restResources,
     future: {
@@ -36,7 +49,6 @@ const shopify = shopifyApp({
       lineItemBilling: true,
       unstable_managedPricingSupport: true,
     },
-    // Increased to 5 minutes (300 seconds) to completely override the system time drift
     allowedClockSkew: 300,
     billing: undefined,
   },

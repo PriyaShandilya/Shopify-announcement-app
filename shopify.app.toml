@@ -16,7 +16,6 @@ redirect_urls = [ "https://shopify-announcement-app-c5dh.onrender.com/api/auth/c
 api_version = "2026-07"
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
 
 # shopify.app.toml

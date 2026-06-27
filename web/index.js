@@ -4,8 +4,11 @@ import { readFileSync } from "fs";
 import express from "express";
 import serveStatic from "serve-static";
 
-import dotenv from "dotenv";
-dotenv.config({ path: join(process.cwd(), "..", ".env") });
+// ✅ Fix 1: Only load .env locally, not in production
+if (process.env.NODE_ENV !== "production") {
+  const { default: dotenv } = await import("dotenv");
+  dotenv.config({ path: join(process.cwd(), "..", ".env") });
+}
 
 import shopify from "./shopify.js";
 import productCreator from "./product-creator.js";
@@ -24,23 +27,31 @@ const STATIC_PATH =
 
 const app = express();
 
-// Set up Shopify authentication and webhook handling
+// ✅ Fix 2: Shopify auth & webhook routes (must be before any body parsing)
 app.get(shopify.config.auth.path, shopify.auth.begin());
+
 app.get(
   shopify.config.auth.callbackPath,
   shopify.auth.callback(),
   shopify.redirectToShopifyOrAppRoot()
 );
+
 app.post(
   shopify.config.webhooks.path,
   shopify.processWebhooks({ webhookHandlers: PrivacyWebhookHandlers })
 );
 
-// Middleware configurations
-app.use("/api/*", shopify.validateAuthenticatedSession());
+// ✅ Fix 3: Body parsing AFTER webhook route
 app.use(express.json());
 
-// 1. GET Products Count Route
+// ✅ Fix 4: Validate authenticated session for all /api routes
+app.use("/api/*", shopify.validateAuthenticatedSession());
+
+// ──────────────────────────────────────────────
+// ROUTES
+// ──────────────────────────────────────────────
+
+// 1. GET Products Count
 app.get("/api/products/count", async (_req, res) => {
   try {
     const client = new shopify.api.clients.Graphql({
@@ -62,7 +73,7 @@ app.get("/api/products/count", async (_req, res) => {
   }
 });
 
-// 2. POST Products Creation Route
+// 2. POST Create Products
 app.post("/api/products", async (_req, res) => {
   let status = 200;
   let error = null;
@@ -70,30 +81,35 @@ app.post("/api/products", async (_req, res) => {
   try {
     await productCreator(res.locals.shopify.session);
   } catch (e) {
-    console.log(`Failed to process products/create: ${e.message}`);
+    console.error(`Failed to process products/create: ${e.message}`);
     status = 500;
     error = e.message;
   }
+
   res.status(status).send({ success: status === 200, error });
 });
 
-// 3. POST Save Announcement & Sync Metafields
+// 3. POST Save Announcement & Sync to Shopify Metafields
 app.post("/api/announcement", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
     const { text } = req.body;
 
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ success: false, error: "Announcement text is required." });
+    }
+
     // Connect to MongoDB
     await connectDB();
 
-    // Save to MongoDB
+    // Save/update in MongoDB
     await AnnouncementAudit.findOneAndUpdate(
       { shop: session.shop },
       { announcementText: text, updatedAt: new Date() },
-      { upsert: true }
+      { upsert: true, new: true }
     );
 
-    // ✅ Step 1: Fetch the real numeric Shop GID
+    // Step 1: Fetch real Shop GID
     const client = new shopify.api.clients.Graphql({ session });
 
     const shopResponse = await client.request(`
@@ -104,9 +120,13 @@ app.post("/api/announcement", async (req, res) => {
       }
     `);
 
-    const shopId = shopResponse.data.shop.id; // ✅ "gid://shopify/Shop/12345678"
+    const shopId = shopResponse.data?.shop?.id;
 
-    // ✅ Step 2: Use real shopId in metafields mutation
+    if (!shopId) {
+      return res.status(500).json({ success: false, error: "Could not fetch shop ID from Shopify." });
+    }
+
+    // Step 2: Set metafield using real shopId
     const graphqlQuery = `
       mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
         metafieldsSet(metafields: $metafields) {
@@ -131,31 +151,41 @@ app.post("/api/announcement", async (req, res) => {
           key: "announcement",
           type: "single_line_text_field",
           value: text,
-          ownerId: shopId  // ✅ Correct: "gid://shopify/Shop/12345678"
-        }
-      ]
+          ownerId: shopId,
+        },
+      ],
     };
 
-    const response = await client.request(graphqlQuery, { variables: graphqlVariables });
+    const response = await client.request(graphqlQuery, {
+      variables: graphqlVariables,
+    });
 
-    if (response.data?.metafieldsSet?.userErrors?.length > 0) {
-      return res.status(400).json({ errors: response.data.metafieldsSet.userErrors });
+    const userErrors = response.data?.metafieldsSet?.userErrors;
+
+    if (userErrors && userErrors.length > 0) {
+      console.error("Metafield userErrors:", userErrors);
+      return res.status(400).json({ success: false, errors: userErrors });
     }
 
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error("Shopify Sync Error Details:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err instanceof Error ? err.message : String(err) 
+    console.error("Shopify Sync Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 });
 
-// Serve frontend assets cleanly
+// ──────────────────────────────────────────────
+// FRONTEND SERVING
+// ──────────────────────────────────────────────
+
+// ✅ Fix 5: CSP headers before static files
 app.use(shopify.cspHeaders());
 app.use(serveStatic(STATIC_PATH, { index: false }));
 
+// ✅ Fix 6: ensureInstalledOnShop catches direct browser access without ?shop=
 app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
   return res
     .status(200)
@@ -167,6 +197,10 @@ app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
     );
 });
 
+// ──────────────────────────────────────────────
+// START SERVER
+// ──────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`Backend server successfully listening on port ${PORT}`);
+  console.log(`✅ Backend server listening on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
 });
