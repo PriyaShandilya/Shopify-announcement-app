@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const AuditSchema = new mongoose.Schema({
   shop: String,
   announcementText: String,
-  updatedAt: { type: Date, default: Date.now }
+   createdAt: Date 
 });
 
 export const AnnouncementAudit = mongoose.model('AnnouncementAudit', AuditSchema);

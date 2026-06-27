@@ -103,11 +103,12 @@ app.post("/api/announcement", async (req, res) => {
     await connectDB();
 
     // Save/update in MongoDB
-    await AnnouncementAudit.findOneAndUpdate(
-      { shop: session.shop },
-      { announcementText: text, updatedAt: new Date() },
-      { upsert: true, new: true }
-    );
+// Creates a NEW record every time — keeps all history
+await AnnouncementAudit.create({
+  shop: session.shop,
+  announcementText: text,
+  createdAt: new Date()
+});
 
     // Step 1: Fetch real Shop GID
     const client = new shopify.api.clients.Graphql({ session });
