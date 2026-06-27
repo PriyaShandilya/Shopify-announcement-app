@@ -2,7 +2,7 @@
 
 client_id = "94fe09a74186292e55c2e7da7dec980a"
 name = "announcement-appp"
-application_url = "https://example.com"
+application_url = "https://shopify-announcement-app-c5dh.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -10,7 +10,9 @@ embedded = true
 scopes = "write_products"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_uris = [
+  "https://shopify-announcement-app-c5dh.onrender.com/api/auth/callback"
+]
 
 [webhooks]
 api_version = "2026-07"
