@@ -1,0 +1,36 @@
+{% comment %} extensions/announcement-banner/blocks/banner-embed.liquid {% endcomment %}
+
+{% assign announcement_text = shop.metafields.my_app.announcement.value %}
+
+{% if announcement_text != blank %}
+  <div class="global-app-announcement-banner">
+    <p>{{ announcement_text }}</p>
+  </div>
+{% endif %}
+
+<style>
+  .global-app-announcement-banner {
+    background-color: #008060;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    font-weight: bold;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 999999;
+  }
+  /* Shift theme body layout slightly to avoid covering headers */
+  body {
+    margin-top: 40px !important;
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Floating Announcement",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
