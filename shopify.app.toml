@@ -10,9 +10,7 @@ embedded = true
 scopes = "write_products"
 
 [auth]
-redirect_uris = [
-  "https://shopify-announcement-app-c5dh.onrender.com/api/auth/callback"
-]
+redirect_urls = [ "https://shopify-announcement-app-c5dh.onrender.com/api/auth/callback" ]
 
 [webhooks]
 api_version = "2026-07"
