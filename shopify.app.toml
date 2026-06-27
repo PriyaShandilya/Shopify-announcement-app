@@ -6,7 +6,6 @@ application_url = "https://shopify-announcement-app-c5dh.onrender.com"
 embedded = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "write_products"
 
 [auth]
@@ -17,10 +16,3 @@ api_version = "2026-07"
 
 [build]
 automatically_update_urls_on_dev = true
-
-# shopify.app.toml
-[shop.metafields.my_app.announcement]
-type = "single_line_text_field"
-name = "Storefront Announcement Banner"
-access.admin = "merchant_read_write"
-access.storefront = "public_read"
