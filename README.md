@@ -169,6 +169,7 @@ This app was built following Shopify's modern development ecosystem with these c
 ---
 
 ## Screenshots
+<img width="1919" height="946" alt="image" src="https://github.com/user-attachments/assets/7d6c4b76-7915-401e-a41d-4857895b83fb" />
 
 
 
